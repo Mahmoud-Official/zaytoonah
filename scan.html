@@ -167,6 +167,14 @@
             width: 100% !important;
             height: 100% !important;
             border-radius: 0 !important;
+            transition: transform 0.2s ease-out;
+            /* Smooth zoom */
+        }
+
+        /* Hide library internal overlays */
+        #qr-reader canvas,
+        #qr-reader__scan_region {
+            display: none !important;
         }
     </style>
 </head>
@@ -202,7 +210,7 @@
             <!-- Top Bar -->
             <div class="scanner-header">
                 <div class="scanner-logo">
-                    <img src="https://lh3.googleusercontent.com/aida-public/AB6AXuC9tHpsc7VZdg_HDzHWEnpTmSGSYKy5pPA2VAIdBLZUXO1-3rujVF7PFl2DuG8UtwNY1auJy6zr1mjs4Dc7vwhL0UHpntuw5DSY6VvkWOFBPWmuxERDRtjdAsV47RLS8ent_lA6-gdj6BDE_crBar_lSYoeMYJkVFKqkQn_yfdRFv5wjbeXJhlrjH2pLxyrtdmrPP0_EMipTkvGbjoutbwAMLUnIDx_7eMimtOKgYxlGqT6yBvOMC4MA9-ozsjR48aU6CKxyX6QCF0"
+                    <img src="https://lh3.googleusercontent.com/aida-public/AB6AXuC9tHpsc7VZdg_HDzHWEnpTmSGSYKy5pPA2VAIdBLZUXO1-3rujVF7PFl2DuG8UtwNY1auJy6zr1mjs4Dc7vwhL0UHpntuw5DSY6VvkWOFBPWmuxERDRtjdAsV47RLS8ent_lA6-gdj6BDE_crBar_lSYoeMYJkVFKqkQn_yfdRFv5wjbeXJhlrjH2pLxyrtdmrPP0_EMipTkvGbjoutbwAMLUnIDx_7eMimtOKhYxlGqT6yBvOMC4MA9-ozsjR48aU6CKxyX6QCF0"
                         alt="Zaytoonah">
                     <span>Zaytoonah</span>
                 </div>
@@ -424,46 +432,42 @@
             const zoomSlider = document.getElementById('zoomSlider');
             const zoomControls = document.getElementById('zoomControls');
 
-            // Wait for video track to be ready
+            // Always show zoom controls
+            zoomControls.style.display = 'block';
+
+            zoomSlider.addEventListener('input', () => {
+                const zoomValue = parseFloat(zoomSlider.value);
+                const videoEl = document.querySelector('#qr-reader video');
+
+                // Try hardware zoom first
+                try {
+                    html5QrCode.applyVideoConstraints({
+                        focusMode: 'continuous',
+                        advanced: [{ zoom: zoomValue }]
+                    }).then(() => {
+                        if (videoEl) videoEl.style.transform = 'none';
+                    }).catch(err => {
+                        // Hardware zoom failed, use CSS Fallback
+                        if (videoEl) videoEl.style.transform = `scale(${zoomValue})`;
+                    });
+                } catch (e) {
+                    // Exception, use CSS Fallback
+                    if (videoEl) videoEl.style.transform = `scale(${zoomValue})`;
+                }
+            });
+
+            // Initialize slider value if possible
             setTimeout(() => {
                 try {
-                    // Try to get capabilities from the library
-                    let capabilities = html5QrCode.getRunningTrackCapabilities();
-
-                    // Fallback: Try to get from video element track directly
-                    if (!capabilities || !capabilities.zoom) {
-                        const video = document.querySelector("#qr-reader video");
-                        if (video && video.srcObject) {
-                            const track = video.srcObject.getVideoTracks()[0];
-                            if (track && track.getCapabilities) {
-                                capabilities = track.getCapabilities();
-                            }
-                        }
-                    }
-
+                    const capabilities = html5QrCode.getRunningTrackCapabilities();
                     if (capabilities && capabilities.zoom) {
-                        const zoomCap = capabilities.zoom;
-                        zoomSlider.min = zoomCap.min;
-                        zoomSlider.max = zoomCap.max;
-                        zoomSlider.step = zoomCap.step;
-                        zoomSlider.value = zoomCap.current || zoomCap.min;
-
-                        zoomControls.style.display = 'block';
-
-                        zoomSlider.addEventListener('input', () => {
-                            html5QrCode.applyVideoConstraints({
-                                focusMode: 'continuous',
-                                advanced: [{ zoom: parseFloat(zoomSlider.value) }]
-                            });
-                        });
-                    } else {
-                        // Software simulated zoom? No, hardware zoom is what we need.
-                        // If no hardware zoom, hide slider.
-                        console.log("Zoom not supported by device/browser");
+                        zoomSlider.min = capabilities.zoom.min;
+                        zoomSlider.max = capabilities.zoom.max;
+                        zoomSlider.step = capabilities.zoom.step;
+                        zoomSlider.value = capabilities.zoom.current;
                     }
-                } catch (e) {
-                    console.log("Could not setup zoom", e);
-                }
+                    // Else keep default 1-5 range
+                } catch (e) { }
             }, 1000);
         }
 
