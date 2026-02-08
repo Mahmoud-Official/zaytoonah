@@ -188,7 +188,7 @@
         }
 
         // Render result
-        function renderResult(product, status, explanation, matchedIngredients) {
+        function renderResult(product, status, explanation, matchedIngredients, traces) {
             const mainContent = document.getElementById('mainContent');
 
             let statusHeaderClass = '';
@@ -220,6 +220,17 @@
                     <ul class="matched-list">
                         ${matchedIngredients.map(i => `<li>${i}</li>`).join('')}
                     </ul>
+                `;
+            }
+
+            // Build traces warning
+            let tracesHtml = '';
+            if (traces) {
+                tracesHtml = `
+                    <div style="margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid rgba(0,0,0,0.05);">
+                        <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.25rem;">May Contain / Traces:</p>
+                        <p style="font-size: 0.875rem; font-weight: 500; color: var(--text-primary); text-transform: capitalize;">${traces}</p>
+                    </div>
                 `;
             }
 
@@ -269,6 +280,7 @@
                         <h3 style="font-size: 1.5rem; font-weight: 700; color: ${statusColor}; margin: 0.5rem 0;">${statusTitle}</h3>
                         <p style="color: var(--text-secondary); font-size: 0.875rem;">${explanation}</p>
                         ${matchedHtml}
+                        ${tracesHtml}
                     </div>
                 </div>
                 
@@ -419,31 +431,44 @@
             currentProduct = product;
 
             // Get ingredients and allergens from API
-            const ingredientsText = product.ingredients_text || product.ingredients_text_en || '';
+            // Prefer English ingredients, fallback to generic
+            const ingredientsText = product.ingredients_text_en || product.ingredients_text || '';
             const allergensFromApi = product.allergens || product.allergens_tags?.join(' ') || '';
+            const traces = product.traces || product.traces_tags?.map(t => t.replace('en:', '').replace('fr:', '')).join(', ') || '';
+
+            // Update product object with preferred text for display
+            product.ingredients_text = ingredientsText; // Override for display
 
             let status, explanation, matchedIngredients = [];
 
             // Decision logic per PRD
-            if (!ingredientsText && !allergensFromApi) {
+            if (!ingredientsText && !allergensFromApi && !traces) {
                 // Missing data
                 status = 'UNCERTAIN';
                 explanation = 'Ingredients or allergens information is missing for this product.';
             } else {
                 // Check against user's allergy
-                const check = checkIngredients(ingredientsText, allergensFromApi, selectedAllergy);
+                // Include traces in check
+                const check = checkIngredients(ingredientsText, allergensFromApi + ' ' + traces, selectedAllergy);
 
                 if (check.matched.length > 0) {
                     status = 'UNSAFE';
                     matchedIngredients = check.matched;
                     explanation = `Contains ingredients prohibited for ${ALLERGIES[selectedAllergy].name}.`;
+
+                    // Add disclaimer if only matches are from traces
+                    const onlyTraces = check.matched.every(m => traces.toLowerCase().includes(m.toLowerCase()) && !ingredientsText.toLowerCase().includes(m.toLowerCase()));
+                    if (onlyTraces) {
+                        explanation = `May contain traces of ${ALLERGIES[selectedAllergy].name}.`;
+                    }
                 } else {
                     status = 'SAFE';
                     explanation = `No prohibited ingredients found for ${ALLERGIES[selectedAllergy].name}.`;
                 }
             }
 
-            renderResult(product, status, explanation, matchedIngredients);
+            // Render result with traces info
+            renderResult(product, status, explanation, matchedIngredients, traces);
             saveToHistory(product, status, matchedIngredients);
         }
 

@@ -1,0 +1,12 @@
+node_modules/
+.next/
+out/
+build/
+dist/
+.env
+.env.local
+.DS_Store
+debug_product.js
+out.txt
+product_debug.json
+*.log
