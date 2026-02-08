@@ -113,7 +113,7 @@ Allergies (Hardcode These Exactly)
       ]
     },
     {
-      "name": "Gluten Allergy (Celiac)",
+      "name": "Gluten Allergy",
       "prohibited_ingredients": [
         "gluten",
         "wheat",
