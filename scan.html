@@ -18,8 +18,8 @@
     <!-- Styles -->
     <link rel="stylesheet" href="styles.css">
 
-    <!-- QuaggaJS for barcode scanning -->
-    <script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2/dist/quagga.min.js"></script>
+    <!-- Html5-Qrcode Library -->
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
 
     <style>
         .scanner-page {
@@ -124,6 +124,50 @@
             flex: 1;
             padding: var(--space-3);
         }
+
+        .zoom-controls {
+            position: absolute;
+            bottom: 120px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 80%;
+            max-width: 300px;
+            z-index: 10;
+            display: none;
+            /* Hidden until scanner starts */
+            background: rgba(0, 0, 0, 0.5);
+            padding: 10px 20px;
+            border-radius: 20px;
+            backdrop-filter: blur(4px);
+        }
+
+        .zoom-slider {
+            width: 100%;
+            accent-color: var(--primary);
+            height: 4px;
+        }
+
+        .zoom-labels {
+            display: flex;
+            justify-content: space-between;
+            color: white;
+            font-size: 0.75rem;
+            margin-top: 4px;
+            font-weight: 500;
+        }
+
+        #qr-reader {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        #qr-reader video {
+            object-fit: cover !important;
+            width: 100% !important;
+            height: 100% !important;
+            border-radius: 0 !important;
+        }
     </style>
 </head>
 
@@ -131,10 +175,21 @@
     <div class="scanner-page">
         <!-- Camera Feed / Placeholder -->
         <div id="interactive">
+            <div id="qr-reader"></div>
             <div class="camera-placeholder" id="cameraPlaceholder">
                 <div class="camera-placeholder-content">
                     <span class="material-icons-round">videocam</span>
                     <p>Camera initializing...</p>
+                </div>
+            </div>
+
+            <!-- Zoom Controls -->
+            <div class="zoom-controls" id="zoomControls">
+                <input type="range" min="1" max="5" step="0.1" value="1" class="zoom-slider" id="zoomSlider">
+                <div class="zoom-labels">
+                    <span>1x</span>
+                    <span>Zoom</span>
+                    <span>5x</span>
                 </div>
             </div>
         </div>
@@ -146,9 +201,6 @@
         <div class="scanner-content">
             <!-- Top Bar -->
             <div class="scanner-header">
-                <button class="scanner-icon-btn" id="flashToggle" aria-label="Toggle flash">
-                    <span class="material-icons-round">flash_off</span>
-                </button>
                 <div class="scanner-logo">
                     <img src="https://lh3.googleusercontent.com/aida-public/AB6AXuC9tHpsc7VZdg_HDzHWEnpTmSGSYKy5pPA2VAIdBLZUXO1-3rujVF7PFl2DuG8UtwNY1auJy6zr1mjs4Dc7vwhL0UHpntuw5DSY6VvkWOFBPWmuxERDRtjdAsV47RLS8ent_lA6-gdj6BDE_crBar_lSYoeMYJkVFKqkQn_yfdRFv5wjbeXJhlrjH2pLxyrtdmrPP0_EMipTkvGbjoutbwAMLUnIDx_7eMimtOKgYxlGqT6yBvOMC4MA9-ozsjR48aU6CKxyX6QCF0"
                         alt="Zaytoonah">
@@ -162,7 +214,7 @@
             <!-- Instructions -->
             <div class="scanner-instructions">
                 <h2>Scan product barcode</h2>
-                <p>Position barcode within frame</p>
+                <p>Use slider to zoom if needed</p>
             </div>
 
             <!-- Scanner Frame -->
@@ -191,9 +243,6 @@
                     <span class="material-icons-round">keyboard</span>
                     <span>Enter barcode manually</span>
                 </button>
-                <p class="scanner-help">
-                    Having trouble scanning? Ensure good lighting or try manual entry.
-                </p>
             </div>
 
             <!-- Bottom Nav -->
@@ -237,25 +286,24 @@
 
     <script src="app.js"></script>
     <script>
-        let flashOn = false;
-        let quaggaInitialized = false;
+        let html5QrCode;
+        let isScanning = false;
 
-        // Flash toggle (mock - real implementation requires torch API)
-        document.getElementById('flashToggle').addEventListener('click', () => {
-            flashOn = !flashOn;
-            const icon = document.querySelector('#flashToggle .material-icons-round');
-            icon.textContent = flashOn ? 'flash_on' : 'flash_off';
-        });
-
-        // Manual entry modal
+        // Manual entry modal handlers
         document.getElementById('manualEntryBtn').addEventListener('click', () => {
             document.getElementById('manualModal').classList.add('active');
             document.getElementById('manualBarcode').focus();
+            if (html5QrCode && isScanning) {
+                html5QrCode.pause();
+            }
         });
 
         document.getElementById('cancelManual').addEventListener('click', () => {
             document.getElementById('manualModal').classList.remove('active');
             document.getElementById('manualBarcode').value = '';
+            if (html5QrCode && isScanning) {
+                html5QrCode.resume();
+            }
         });
 
         document.getElementById('submitManual').addEventListener('click', () => {
@@ -274,117 +322,120 @@
         // Process scanned/entered barcode
         function processBarcode(barcode) {
             document.getElementById('scanStatus').textContent = 'Found! Loading...';
+            document.querySelector('.scanner-status-pill').style.borderColor = 'var(--primary)';
+            document.querySelector('.scanner-status-pill').style.background = 'rgba(124, 154, 75, 0.2)';
 
-            // Simulate API lookup delay
-            setTimeout(() => {
-                // Navigate to results page with barcode
+            // Stop scanner if running
+            if (html5QrCode && isScanning) {
+                html5QrCode.stop().then(() => {
+                    isScanning = false;
+                    window.location.href = `result.html?barcode=${encodeURIComponent(barcode)}`;
+                }).catch(err => {
+                    console.error("Failed to stop scanner", err);
+                    window.location.href = `result.html?barcode=${encodeURIComponent(barcode)}`;
+                });
+            } else {
                 window.location.href = `result.html?barcode=${encodeURIComponent(barcode)}`;
-            }, 800);
+            }
         }
 
-        // Initialize QuaggaJS
-        function initScanner() {
-            if (typeof Quagga === 'undefined') {
-                console.log('QuaggaJS not loaded, using demo mode');
-                document.getElementById('cameraPlaceholder').innerHTML = `
-                    <div class="camera-placeholder-content">
-                        <span class="material-icons-round">qr_code_scanner</span>
-                        <p>Demo Mode</p>
-                        <p style="font-size: 0.75rem; margin-top: 0.5rem;">Use manual entry to test</p>
-                    </div>
-                `;
-                return;
-            }
-
-            Quagga.init({
-                inputStream: {
-                    name: "Live",
-                    type: "LiveStream",
-                    target: document.querySelector('#interactive'),
-                    constraints: {
-                        facingMode: "environment",
-                        width: { min: 1280, ideal: 1920, max: 2560 },
-                        height: { min: 720, ideal: 1080, max: 1440 },
-                        aspectRatio: { min: 1, max: 2 },
-                        focusMode: "continuous"
-                    }
-                },
-                locator: {
-                    patchSize: "large",
-                    halfSample: false
-                },
-                numOfWorkers: navigator.hardwareConcurrency || 4,
-                frequency: 10,
-                decoder: {
-                    readers: [
-                        "ean_reader",
-                        "ean_8_reader",
-                        "upc_reader",
-                        "upc_e_reader",
-                        "code_128_reader"
-                    ]
-                },
-                locate: true
-            }, function (err) {
-                if (err) {
-                    console.log('Camera access denied or not available:', err);
-                    document.getElementById('cameraPlaceholder').innerHTML = `
-                        <div class="camera-placeholder-content">
-                            <span class="material-icons-round">no_photography</span>
-                            <p>Camera not available</p>
-                            <p style="font-size: 0.75rem; margin-top: 0.5rem;">Use manual entry instead</p>
-                        </div>
-                    `;
-                    return;
-                }
+        // Initialize Scanner
+        async function initScanner() {
+            try {
+                // Request camera permission explicitly first to fail fast
+                await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
 
                 document.getElementById('cameraPlaceholder').style.display = 'none';
-                Quagga.start();
-                quaggaInitialized = true;
-            });
 
-            let lastCode = null;
-            let codeCount = 0;
-            const requiredConsecutiveReads = 5;
+                html5QrCode = new Html5Qrcode("qr-reader");
 
-            Quagga.onDetected(function (result) {
-                const code = result.codeResult.code;
-
-                if (code) {
-                    if (code === lastCode) {
-                        codeCount++;
-                        // Show verifying feedback
-                        if (codeCount > 1) {
-                            document.getElementById('scanStatus').textContent = 'Verifying...';
-                            document.querySelector('.scanner-status-pill').style.borderColor = 'var(--primary)';
-                        }
-
-                        if (codeCount >= requiredConsecutiveReads) {
-                            if (quaggaInitialized) {
-                                Quagga.stop();
-                            }
-                            processBarcode(code);
-                        }
-                    } else {
-                        lastCode = code;
-                        codeCount = 0;
-                        document.getElementById('scanStatus').textContent = 'Searching...';
-                        document.querySelector('.scanner-status-pill').style.borderColor = 'rgba(255,255,255,0.2)';
+                const config = {
+                    fps: 10,
+                    qrbox: { width: 250, height: 250 },
+                    aspectRatio: 1.0,
+                    experimentalFeatures: {
+                        useBarCodeDetectorIfSupported: true
                     }
-                }
-            });
+                };
+
+                // Start scanning
+                await html5QrCode.start(
+                    { facingMode: "environment" },
+                    config,
+                    (decodedText, decodedResult) => {
+                        // Success callback
+                        if (isScanning) {
+                            processBarcode(decodedText);
+                        }
+                    },
+                    (errorMessage) => {
+                        // Error callback (scanning...)
+                        // console.log(errorMessage);
+                    }
+                );
+
+                isScanning = true;
+
+                // Enable Zoom if supported
+                setupZoom();
+
+            } catch (err) {
+                console.error("Error starting scanner", err);
+                document.getElementById('cameraPlaceholder').innerHTML = `
+                    <div class="camera-placeholder-content">
+                        <span class="material-icons-round">no_photography</span>
+                        <p>Camera not available</p>
+                        <p style="font-size: 0.75rem; margin-top: 0.5rem;">${err.message || 'Check permissions'}</p>
+                    </div>
+                `;
+            }
         }
 
-        // Start scanner on page load
+        // Zoom Logic
+        function setupZoom() {
+            const zoomSlider = document.getElementById('zoomSlider');
+            const zoomControls = document.getElementById('zoomControls');
+
+            // Wait for video track to be ready
+            setTimeout(() => {
+                try {
+                    const capabilities = html5QrCode.getRunningTrackCapabilities();
+
+                    if (capabilities && capabilities.zoom) {
+                        const zoomCap = capabilities.zoom;
+                        zoomSlider.min = zoomCap.min;
+                        zoomSlider.max = zoomCap.max;
+                        zoomSlider.step = zoomCap.step;
+                        zoomSlider.value = zoomCap.current || zoomCap.min;
+
+                        zoomControls.style.display = 'block';
+
+                        zoomSlider.addEventListener('input', () => {
+                            html5QrCode.applyVideoConstraints({
+                                focusMode: 'continuous',
+                                advanced: [{ zoom: parseFloat(zoomSlider.value) }]
+                            });
+                        });
+                    } else {
+                        // Software simulated zoom? No, hardware zoom is what we need.
+                        // If no hardware zoom, hide slider.
+                        console.log("Zoom not supported by device/browser");
+                    }
+                } catch (e) {
+                    console.log("Could not setup zoom", e);
+                }
+            }, 1000);
+        }
+
+        // Start on load
         document.addEventListener('DOMContentLoaded', () => {
-            // Small delay to allow page to render
             setTimeout(initScanner, 500);
         });
 
-        // Cleanup on page unload
+        // Cleanup
         window.addEventListener('beforeunload', () => {
-            if (quaggaInitialized && typeof Quagga !== 'undefined') {
-                Quagga.stop();
+            if (html5QrCode && isScanning) {
+                html5QrCode.stop();
             }
         });
     </script>
