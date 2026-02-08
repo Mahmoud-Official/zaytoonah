@@ -303,17 +303,18 @@
                     target: document.querySelector('#interactive'),
                     constraints: {
                         facingMode: "environment",
-                        width: { min: 640, ideal: 1280, max: 1920 },
-                        height: { min: 480, ideal: 720, max: 1080 },
+                        width: { min: 1280, ideal: 1920, max: 2560 },
+                        height: { min: 720, ideal: 1080, max: 1440 },
                         aspectRatio: { min: 1, max: 2 },
                         focusMode: "continuous"
                     }
                 },
                 locator: {
-                    patchSize: "medium",
-                    halfSample: true
+                    patchSize: "large",
+                    halfSample: false
                 },
-                numOfWorkers: 2,
+                numOfWorkers: navigator.hardwareConcurrency || 4,
+                frequency: 10,
                 decoder: {
                     readers: [
                         "ean_reader",
@@ -342,13 +343,34 @@
                 quaggaInitialized = true;
             });
 
+            let lastCode = null;
+            let codeCount = 0;
+            const requiredConsecutiveReads = 5;
+
             Quagga.onDetected(function (result) {
-                if (result.codeResult && result.codeResult.code) {
-                    // Stop scanning after detection
-                    if (quaggaInitialized) {
-                        Quagga.stop();
+                const code = result.codeResult.code;
+
+                if (code) {
+                    if (code === lastCode) {
+                        codeCount++;
+                        // Show verifying feedback
+                        if (codeCount > 1) {
+                            document.getElementById('scanStatus').textContent = 'Verifying...';
+                            document.querySelector('.scanner-status-pill').style.borderColor = 'var(--primary)';
+                        }
+
+                        if (codeCount >= requiredConsecutiveReads) {
+                            if (quaggaInitialized) {
+                                Quagga.stop();
+                            }
+                            processBarcode(code);
+                        }
+                    } else {
+                        lastCode = code;
+                        codeCount = 0;
+                        document.getElementById('scanStatus').textContent = 'Searching...';
+                        document.querySelector('.scanner-status-pill').style.borderColor = 'rgba(255,255,255,0.2)';
                     }
-                    processBarcode(result.codeResult.code);
                 }
             });
         }
