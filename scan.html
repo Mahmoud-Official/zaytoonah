@@ -349,14 +349,27 @@
 
                 html5QrCode = new Html5Qrcode("qr-reader");
 
+                const formatsToSupport = [
+                    Html5QrcodeSupportedFormats.EAN_13,
+                    Html5QrcodeSupportedFormats.EAN_8,
+                    Html5QrcodeSupportedFormats.UPC_A,
+                    Html5QrcodeSupportedFormats.UPC_E,
+                    Html5QrcodeSupportedFormats.CODE_128
+                ];
+
                 const config = {
                     fps: 10,
                     qrbox: { width: 250, height: 250 },
                     aspectRatio: 1.0,
+                    formatsToSupport: formatsToSupport,
                     experimentalFeatures: {
                         useBarCodeDetectorIfSupported: true
                     }
                 };
+
+                let lastCode = null;
+                let codeCount = 0;
+                const requiredConsecutiveReads = 3; // Reduced to 3 for faster but stable scans
 
                 // Start scanning
                 await html5QrCode.start(
@@ -365,7 +378,22 @@
                     (decodedText, decodedResult) => {
                         // Success callback
                         if (isScanning) {
-                            processBarcode(decodedText);
+                            // Stability Check
+                            if (decodedText === lastCode) {
+                                codeCount++;
+                                if (codeCount > 1) {
+                                    document.getElementById('scanStatus').textContent = 'Verifying... (' + codeCount + '/' + requiredConsecutiveReads + ')';
+                                    document.querySelector('.scanner-status-pill').style.borderColor = 'var(--primary)';
+                                }
+
+                                if (codeCount >= requiredConsecutiveReads) {
+                                    processBarcode(decodedText);
+                                }
+                            } else {
+                                lastCode = decodedText;
+                                codeCount = 1;
+                                document.getElementById('scanStatus').textContent = 'Found potential code...';
+                            }
                         }
                     },
                     (errorMessage) => {
@@ -399,7 +427,19 @@
             // Wait for video track to be ready
             setTimeout(() => {
                 try {
-                    const capabilities = html5QrCode.getRunningTrackCapabilities();
+                    // Try to get capabilities from the library
+                    let capabilities = html5QrCode.getRunningTrackCapabilities();
+
+                    // Fallback: Try to get from video element track directly
+                    if (!capabilities || !capabilities.zoom) {
+                        const video = document.querySelector("#qr-reader video");
+                        if (video && video.srcObject) {
+                            const track = video.srcObject.getVideoTracks()[0];
+                            if (track && track.getCapabilities) {
+                                capabilities = track.getCapabilities();
+                            }
+                        }
+                    }
 
                     if (capabilities && capabilities.zoom) {
                         const zoomCap = capabilities.zoom;
