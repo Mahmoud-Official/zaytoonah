@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zaytoonah - Allergen Scanner</title>
+    <meta name="description" content="Scan food products and check for allergens instantly with Zaytoonah">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Quicksand:wght@500;700&display=swap"
+        rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+
+    <!-- Styles -->
+    <link rel="stylesheet" href="styles.css">
+
+    <style>
+        .empty-state {
+            text-align: center;
+            padding: 3rem 1.5rem;
+            color: var(--text-muted);
+        }
+
+        .empty-state .material-icons-round {
+            font-size: 4rem;
+            opacity: 0.3;
+            margin-bottom: 1rem;
+        }
+
+        .empty-state h4 {
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin-bottom: 0.5rem;
+        }
+
+        .empty-state p {
+            font-size: 0.875rem;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- First-time user redirect -->
+    <script>
+        (function () {
+            const profile = localStorage.getItem('zaytoonah_profile');
+            const hasAllergies = profile && Object.keys(JSON.parse(profile)).length > 0;
+            if (!hasAllergies) {
+                window.location.replace('profile.html?setup=true');
+            }
+        })();
+    </script>
+
+    <div class="app-container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <div class="header-logo">
+                    <img src="https://lh3.googleusercontent.com/aida-public/AB6AXuDwNGxVnO5ydWt85pgIdlQ1NUXQRpTsAN8_beBbi2Nlk_9kTSiAmEIYKH60dhtaKqEgH7DALRpnE0FRLozTb7X1Z4NOv8QY6nxbGqpB315l8hhp2Qs7xVFDxiuICAqm-H5Cr9fac6w1ZRIzvKO9lW6HxNk5IkGyk1ZW9SeuOPXwUZ7oZgDHq1EwnriAGF2p9_kuYkTOYl7l9A9lxr09DP8DldZaJIc0gNyhYUUx97-bOdkRm-hmLI7tiduZD0v8gB1V5sD5h3acZFU"
+                        alt="Zaytoonah Logo">
+                    <span class="header-title">Zaytoonah</span>
+                </div>
+                <button class="icon-btn" id="darkModeToggle" aria-label="Toggle dark mode">
+                    <span class="material-icons-round">dark_mode</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- CTA Card -->
+            <div class="cta-card mb-8">
+                <h2 class="cta-title">Ready to shop?</h2>
+                <p class="cta-description">Scan a barcode to instantly check for your allergens.</p>
+                <a href="scan.html" class="btn btn-primary btn-block">
+                    <span class="material-icons-round">qr_code_scanner</span>
+                    <span>Start Scan</span>
+                </a>
+            </div>
+
+            <!-- History Section -->
+            <div class="history-section">
+                <div class="history-header"
+                    style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem;">
+                    <h3 style="font-family: var(--font-display); font-weight: 700; font-size: 1.125rem;">History</h3>
+                    <div class="filter-tabs">
+                        <button class="filter-tab active" data-filter="all">All</button>
+                        <button class="filter-tab" data-filter="safe">Safe</button>
+                        <button class="filter-tab" data-filter="unsafe">Unsafe</button>
+                    </div>
+                </div>
+
+                <!-- History List - Dynamically populated -->
+                <div class="card" id="historyList">
+                    <!-- Empty state shown by default -->
+                    <div class="empty-state" id="emptyState">
+                        <span class="material-icons-round">qr_code_scanner</span>
+                        <h4>No scans yet</h4>
+                        <p>Start scanning products to see your history here.</p>
+                    </div>
+                </div>
+
+                <!-- View More - hidden when no history -->
+                <div class="mt-6 text-center" id="viewMoreBtn" style="display: none;">
+                    <button class="btn" style="background: none; color: var(--primary); font-size: 0.875rem;"
+                        onclick="clearHistory()">
+                        <span class="material-icons-round" style="font-size: 1rem;">delete_outline</span>
+                        <span>Clear History</span>
+                    </button>
+                </div>
+            </div>
+        </main>
+
+        <!-- Bottom Navigation -->
+        <nav class="bottom-nav">
+            <div class="nav-container">
+                <a href="index.html" class="nav-item active">
+                    <span class="material-icons-round">history</span>
+                    <span>History</span>
+                </a>
+                <a href="scan.html" class="nav-item">
+                    <span class="material-icons-round">qr_code_scanner</span>
+                    <span>Scan</span>
+                </a>
+                <a href="profile.html" class="nav-item">
+                    <span class="material-icons-round">medical_services</span>
+                    <span>Allergies</span>
+                </a>
+            </div>
+        </nav>
+    </div>
+
+    <script src="app.js"></script>
+    <script>
+        // Icon mapping for history items
+        const iconMap = {
+            'local_pizza': 'local_pizza',
+            'lunch_dining': 'lunch_dining',
+            'cookie': 'cookie',
+            'soup_kitchen': 'soup_kitchen',
+            'local_drink': 'local_drink',
+            'set_meal': 'set_meal',
+            'icecream': 'icecream',
+            'restaurant': 'restaurant',
+            'fastfood': 'fastfood',
+            'bakery_dining': 'bakery_dining'
+        };
+
+        // Get relative time string
+        function getRelativeTime(timestamp) {
+            const now = new Date();
+            const date = new Date(timestamp);
+            const diffMs = now - date;
+            const diffSec = Math.floor(diffMs / 1000);
+            const diffMin = Math.floor(diffSec / 60);
+            const diffHour = Math.floor(diffMin / 60);
+            const diffDay = Math.floor(diffHour / 24);
+
+            if (diffSec < 60) return 'Just now';
+            if (diffMin < 60) return `${diffMin} min${diffMin > 1 ? 's' : ''} ago`;
+            if (diffHour < 24) return `${diffHour} hour${diffHour > 1 ? 's' : ''} ago`;
+            if (diffDay === 1) return 'Yesterday';
+            if (diffDay < 7) return `${diffDay} days ago`;
+
+            return date.toLocaleDateString();
+        }
+
+        // Render history from localStorage
+        function renderHistory(filter = 'all') {
+            const historyList = document.getElementById('historyList');
+            const emptyState = document.getElementById('emptyState');
+            const viewMoreBtn = document.getElementById('viewMoreBtn');
+
+            // Get history from localStorage
+            const history = JSON.parse(localStorage.getItem('zaytoonah_history') || '[]');
+
+            // Clear current content except empty state
+            historyList.innerHTML = '';
+
+            if (history.length === 0) {
+                // Show empty state
+                historyList.innerHTML = `
+                    <div class="empty-state" id="emptyState">
+                        <span class="material-icons-round">qr_code_scanner</span>
+                        <h4>No scans yet</h4>
+                        <p>Start scanning products to see your history here.</p>
+                    </div>
+                `;
+                viewMoreBtn.style.display = 'none';
+                return;
+            }
+
+            // Filter history
+            const filteredHistory = filter === 'all'
+                ? history
+                : history.filter(item => item.status === filter);
+
+            if (filteredHistory.length === 0) {
+                historyList.innerHTML = `
+                    <div class="empty-state">
+                        <span class="material-icons-round">filter_list</span>
+                        <h4>No ${filter} items</h4>
+                        <p>No products with "${filter}" status found.</p>
+                    </div>
+                `;
+                viewMoreBtn.style.display = 'block';
+                return;
+            }
+
+            // Render each history item
+            filteredHistory.forEach(item => {
+                const icon = item.icon || 'restaurant';
+                const statusClass = item.status === 'safe' ? 'status-safe' :
+                    item.status === 'unsafe' ? 'status-unsafe' : 'status-uncertain';
+                const statusIcon = item.status === 'safe' ? 'check_circle' :
+                    item.status === 'unsafe' ? 'warning' : 'help';
+                const statusText = item.status === 'safe' ? 'Safe' :
+                    item.status === 'unsafe' ? 'Unsafe' : 'Check';
+
+                const allergenInfo = item.status === 'unsafe' && item.matchedIngredients && item.matchedIngredients.length > 0
+                    ? `<p class="history-item-allergens" style="color: var(--unsafe-text);">Contains: ${item.matchedIngredients.join(', ')}</p>`
+                    : item.status === 'uncertain'
+                        ? `<p class="history-item-allergens" style="color: var(--uncertain-text);">Incomplete data</p>`
+                        : '';
+
+                const itemHtml = `
+                    <div class="history-item" data-status="${item.status}" data-id="${item.id}">
+                        <div class="history-item-content">
+                            <div class="history-item-icon">
+                                <span class="material-icons-round">${icon}</span>
+                            </div>
+                            <div class="history-item-details">
+                                <p class="category">${item.brand || 'Unknown Brand'}</p>
+                                <h4>${item.name || 'Unknown Product'}</h4>
+                                <p class="time">${getRelativeTime(item.timestamp)}</p>
+                                ${allergenInfo}
+                            </div>
+                        </div>
+                        <span class="status-badge ${statusClass}">
+                            <span class="material-icons-round" style="font-size: 0.875rem;">${statusIcon}</span>
+                            ${statusText}
+                        </span>
+                    </div>
+                `;
+
+                historyList.insertAdjacentHTML('beforeend', itemHtml);
+            });
+
+            // Add click handlers
+            document.querySelectorAll('.history-item').forEach(item => {
+                item.addEventListener('click', () => {
+                    const id = item.dataset.id;
+                    window.location.href = `result.html?historyId=${id}`;
+                });
+            });
+
+            viewMoreBtn.style.display = 'block';
+        }
+
+        // Filter functionality
+        document.querySelectorAll('.filter-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                // Update active tab
+                document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+
+                // Re-render with filter
+                renderHistory(tab.dataset.filter);
+            });
+        });
+
+        // Clear history
+        function clearHistory() {
+            if (confirm('Are you sure you want to clear all scan history?')) {
+                localStorage.removeItem('zaytoonah_history');
+                renderHistory();
+            }
+        }
+
+        // Initial render
+        document.addEventListener('DOMContentLoaded', () => {
+            renderHistory();
+        });
+    </script>
+</body>
+
+</html>

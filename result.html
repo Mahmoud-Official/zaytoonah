@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zaytoonah - Scan Result</title>
+    <meta name="description" content="View allergen scan results for your product">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Quicksand:wght@500;700&display=swap"
+        rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+
+    <!-- Styles -->
+    <link rel="stylesheet" href="styles.css">
+
+    <style>
+        .loading-state {
+            text-align: center;
+            padding: 4rem 2rem;
+        }
+
+        .loading-state .spinner {
+            width: 3rem;
+            height: 3rem;
+            border: 3px solid var(--border);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .error-state,
+        .not-found {
+            text-align: center;
+            padding: 4rem 2rem;
+        }
+
+        .error-state .material-icons-round,
+        .not-found .material-icons-round {
+            font-size: 4rem;
+            color: var(--text-muted);
+            opacity: 0.5;
+            margin-bottom: 1rem;
+        }
+
+        .matched-list {
+            margin-top: 0.75rem;
+            padding-left: 1.25rem;
+        }
+
+        .matched-list li {
+            font-size: 0.875rem;
+            color: var(--severity-high);
+            font-weight: 500;
+            margin-bottom: 0.25rem;
+        }
+
+        .ingredients-collapsed {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+        }
+
+        .ingredients-collapsed.expanded {
+            max-height: 500px;
+        }
+
+        .toggle-ingredients {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            width: 100%;
+            padding: 0.75rem 0;
+            background: none;
+            border: none;
+            color: var(--primary);
+            font-size: 0.875rem;
+            font-weight: 600;
+            cursor: pointer;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="result-header">
+            <button class="icon-btn" onclick="goBack()" aria-label="Go back">
+                <span class="material-icons-round">arrow_back</span>
+            </button>
+            <h1 class="result-title">Scan Result</h1>
+            <button class="icon-btn" id="shareBtn" aria-label="Share">
+                <span class="material-icons-round">share</span>
+            </button>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content" style="padding-bottom: 8rem;" id="mainContent">
+            <!-- Loading state -->
+            <div class="loading-state" id="loadingState">
+                <div class="spinner"></div>
+                <p>Looking up product...</p>
+            </div>
+        </main>
+
+        <!-- Bottom Action Bar -->
+        <div class="bottom-action-bar">
+            <div class="btn-group">
+                <a href="index.html" class="btn btn-secondary">
+                    <span class="material-icons-round">history</span>
+                    History
+                </a>
+                <a href="scan.html" class="btn btn-primary">
+                    <span class="material-icons-round">qr_code_scanner</span>
+                    Scan Another
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+    <script>
+        // Allergies from PRD - exact specifications
+        const ALLERGIES = {
+            'peanut': {
+                name: 'Peanut Allergy',
+                prohibited: ['peanut', 'groundnut', 'monkey nut', 'beer nut', 'goober pea', 'arachis oil', 'peanut oil', 'peanut butter', 'peanut flour']
+            },
+            'milk': {
+                name: 'Milk Allergy',
+                prohibited: ['milk', 'casein', 'whey', 'lactose', 'butter', 'cheese', 'cream', 'curds', 'ghee', 'kefir', 'yogurt', 'nougat', 'rennet', 'lactalbumin', 'lactoglobulin']
+            },
+            'egg': {
+                name: 'Egg Allergy',
+                prohibited: ['egg', 'albumin', 'albumen', 'globulin', 'ovomucoid', 'ovovitellin', 'ovalbumin', 'meringue', 'mayonnaise', 'egg white', 'egg yolk', 'egg powder', 'lysozyme', 'e1105']
+            },
+            'gluten': {
+                name: 'Gluten Allergy (Celiac)',
+                prohibited: ['gluten', 'wheat', 'barley', 'rye', 'spelt', 'farina', 'durum', 'semolina', 'triticale', 'malt', 'malt extract', 'malt flavoring', 'brewer\'s yeast']
+            },
+            'soy': {
+                name: 'Soy Allergy',
+                prohibited: ['soy', 'soya', 'soybean', 'edamame', 'soy lecithin', 'miso', 'natto', 'shoyu', 'tamari', 'textured vegetable protein', 'tvp', 'tofu']
+            }
+        };
+
+        // State
+        let currentProduct = null;
+        let isFromHistory = false;
+
+        function goBack() {
+            if (window.history.length > 1) {
+                window.history.back();
+            } else {
+                window.location.href = 'index.html';
+            }
+        }
+
+        // Check ingredients against user's allergy
+        function checkIngredients(ingredientsText, allergensFromApi, userAllergy) {
+            const allergy = ALLERGIES[userAllergy];
+            if (!allergy) return { safe: true, matched: [] };
+
+            const matched = [];
+            const textToCheck = (ingredientsText + ' ' + (allergensFromApi || '')).toLowerCase();
+
+            for (const ingredient of allergy.prohibited) {
+                if (textToCheck.includes(ingredient.toLowerCase())) {
+                    matched.push(ingredient);
+                }
+            }
+
+            return {
+                safe: matched.length === 0,
+                matched: matched
+            };
+        }
+
+        // Render result
+        function renderResult(product, status, explanation, matchedIngredients) {
+            const mainContent = document.getElementById('mainContent');
+
+            let statusHeaderClass = '';
+            let statusTitle = '';
+            let statusColor = '';
+            let statusIcon = '';
+
+            if (status === 'UNCERTAIN') {
+                statusHeaderClass = 'style="background-color: rgba(251, 191, 36, 0.15); border-color: rgba(251, 191, 36, 0.3);"';
+                statusTitle = 'UNCERTAIN';
+                statusColor = 'var(--severity-moderate)';
+                statusIcon = 'help_outline';
+            } else if (status === 'SAFE') {
+                statusHeaderClass = 'class="result-status-header safe"';
+                statusTitle = 'SAFE';
+                statusColor = 'var(--severity-low)';
+                statusIcon = 'check_circle';
+            } else {
+                statusHeaderClass = 'class="result-status-header unsafe"';
+                statusTitle = 'UNSAFE';
+                statusColor = 'var(--severity-high)';
+                statusIcon = 'warning';
+            }
+
+            // Build matched ingredients list
+            let matchedHtml = '';
+            if (matchedIngredients && matchedIngredients.length > 0) {
+                matchedHtml = `
+                    <ul class="matched-list">
+                        ${matchedIngredients.map(i => `<li>${i}</li>`).join('')}
+                    </ul>
+                `;
+            }
+
+            // Build ingredients display (collapsed by default)
+            let ingredientsHtml = '';
+            if (product.ingredients_text) {
+                ingredientsHtml = `
+                    <div class="card mt-4">
+                        <div class="card-body">
+                            <button class="toggle-ingredients" onclick="toggleIngredients()">
+                                <span class="material-icons-round">expand_more</span>
+                                <span>View Ingredients</span>
+                            </button>
+                            <div class="ingredients-collapsed" id="ingredientsList">
+                                <p class="ingredients-list" style="padding-top: 0.5rem; font-size: 0.8rem; line-height: 1.6; color: var(--text-secondary);">
+                                    ${product.ingredients_text}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            mainContent.innerHTML = `
+                <!-- Product Info Card -->
+                <div class="card mb-4">
+                    <div class="card-body">
+                        <div class="product-card">
+                            <div class="product-image" style="background-image: url('${product.image_url || ''}'); background-size: cover; background-position: center;">
+                                ${!product.image_url ? '<span class="material-icons-round">restaurant</span>' : ''}
+                            </div>
+                            <div class="product-info">
+                                <span class="brand">${product.brands || 'Unknown Brand'}</span>
+                                <h2>${product.product_name || 'Unknown Product'}</h2>
+                                <p class="size">${product.quantity || ''}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Status Card -->
+                <div class="card result-status mb-4">
+                    <div ${statusHeaderClass}>
+                        <div class="result-status-icon">
+                            <span class="material-icons-round" style="font-size: 2.5rem; color: ${statusColor};">${statusIcon}</span>
+                        </div>
+                        <h3 style="font-size: 1.5rem; font-weight: 700; color: ${statusColor}; margin: 0.5rem 0;">${statusTitle}</h3>
+                        <p style="color: var(--text-secondary); font-size: 0.875rem;">${explanation}</p>
+                        ${matchedHtml}
+                    </div>
+                </div>
+                
+                ${ingredientsHtml}
+            `;
+        }
+
+        // Toggle ingredients visibility
+        window.toggleIngredients = function () {
+            const list = document.getElementById('ingredientsList');
+            const btn = document.querySelector('.toggle-ingredients .material-icons-round');
+            list.classList.toggle('expanded');
+            btn.textContent = list.classList.contains('expanded') ? 'expand_less' : 'expand_more';
+        };
+
+        // Show error state
+        function showError(title, message) {
+            const mainContent = document.getElementById('mainContent');
+            mainContent.innerHTML = `
+                <div class="error-state">
+                    <span class="material-icons-round">error_outline</span>
+                    <h3 style="font-weight: 600; margin-bottom: 0.5rem;">${title}</h3>
+                    <p style="color: var(--text-secondary); font-size: 0.875rem; margin-bottom: 1.5rem;">${message}</p>
+                    <a href="scan.html" class="btn btn-primary">
+                        <span class="material-icons-round">qr_code_scanner</span>
+                        Try Again
+                    </a>
+                </div>
+            `;
+        }
+
+        // Save to history
+        function saveToHistory(product, status, matchedIngredients) {
+            if (isFromHistory) return;
+
+            const history = JSON.parse(localStorage.getItem('zaytoonah_history') || '[]');
+
+            const entry = {
+                id: Date.now(),
+                barcode: product.code,
+                brand: product.brands || 'Unknown',
+                name: product.product_name || 'Unknown Product',
+                image: product.image_small_url || product.image_url || '',
+                status: status.toLowerCase(),
+                matchedIngredients: matchedIngredients,
+                timestamp: new Date().toISOString()
+            };
+
+            history.unshift(entry);
+            if (history.length > 50) history.pop();
+
+            localStorage.setItem('zaytoonah_history', JSON.stringify(history));
+        }
+
+        // Fetch product from Open Food Facts API
+        async function fetchProduct(barcode) {
+            const url = `https://world.openfoodfacts.org/api/v0/product/${barcode}.json`;
+
+            try {
+                const response = await fetch(url, {
+                    headers: {
+                        'User-Agent': 'Zaytoonah/1.0 - Allergen Scanner App'
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error('Network error');
+                }
+
+                const data = await response.json();
+
+                if (data.status === 0) {
+                    return { error: 'not_found' };
+                }
+
+                return { product: data.product };
+            } catch (error) {
+                console.error('API Error:', error);
+                return { error: 'network' };
+            }
+        }
+
+        // Main initialization
+        async function init() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const barcode = urlParams.get('barcode');
+            const historyId = urlParams.get('historyId');
+
+            // Get user's selected allergy
+            const userAllergy = localStorage.getItem('zaytoonah_profile');
+            if (!userAllergy) {
+                window.location.href = 'profile.html?setup=true';
+                return;
+            }
+
+            const profile = JSON.parse(userAllergy);
+            const selectedAllergy = Object.keys(profile)[0]; // Single allergy per PRD
+
+            if (!selectedAllergy) {
+                window.location.href = 'profile.html?setup=true';
+                return;
+            }
+
+            // Handle history view
+            if (historyId) {
+                isFromHistory = true;
+                const history = JSON.parse(localStorage.getItem('zaytoonah_history') || '[]');
+                const historyItem = history.find(h => h.id === parseInt(historyId));
+
+                if (historyItem) {
+                    const product = {
+                        product_name: historyItem.name,
+                        brands: historyItem.brand,
+                        image_url: historyItem.image
+                    };
+
+                    const status = historyItem.status.toUpperCase();
+                    let explanation = status === 'SAFE' ? 'No prohibited ingredients found.' :
+                        status === 'UNSAFE' ? 'Contains prohibited ingredients for your allergy.' :
+                            'Could not verify ingredients.';
+
+                    renderResult(product, status, explanation, historyItem.matchedIngredients || []);
+                } else {
+                    showError('Not Found', 'This scan is no longer in your history.');
+                }
+                return;
+            }
+
+            // Fetch from API
+            if (!barcode) {
+                showError('No Barcode', 'Please scan a product or enter a barcode.');
+                return;
+            }
+
+            const result = await fetchProduct(barcode);
+
+            if (result.error === 'not_found') {
+                showError('Product Not Found', `We couldn't find product information for barcode: ${barcode}`);
+                return;
+            }
+
+            if (result.error === 'network') {
+                showError('Network Error', 'Could not connect to the product database. Please check your internet connection.');
+                return;
+            }
+
+            const product = result.product;
+            currentProduct = product;
+
+            // Get ingredients and allergens from API
+            const ingredientsText = product.ingredients_text || product.ingredients_text_en || '';
+            const allergensFromApi = product.allergens || product.allergens_tags?.join(' ') || '';
+
+            let status, explanation, matchedIngredients = [];
+
+            // Decision logic per PRD
+            if (!ingredientsText && !allergensFromApi) {
+                // Missing data
+                status = 'UNCERTAIN';
+                explanation = 'Ingredients or allergens information is missing for this product.';
+            } else {
+                // Check against user's allergy
+                const check = checkIngredients(ingredientsText, allergensFromApi, selectedAllergy);
+
+                if (check.matched.length > 0) {
+                    status = 'UNSAFE';
+                    matchedIngredients = check.matched;
+                    explanation = `Contains ingredients prohibited for ${ALLERGIES[selectedAllergy].name}.`;
+                } else {
+                    status = 'SAFE';
+                    explanation = `No prohibited ingredients found for ${ALLERGIES[selectedAllergy].name}.`;
+                }
+            }
+
+            renderResult(product, status, explanation, matchedIngredients);
+            saveToHistory(product, status, matchedIngredients);
+        }
+
+        // Share functionality
+        document.getElementById('shareBtn').addEventListener('click', async () => {
+            if (!currentProduct) return;
+
+            if (navigator.share) {
+                try {
+                    await navigator.share({
+                        title: `Zaytoonah: ${currentProduct.product_name}`,
+                        text: `I checked ${currentProduct.product_name} with Zaytoonah allergen scanner.`,
+                        url: window.location.href
+                    });
+                } catch (err) {
+                    console.log('Share cancelled');
+                }
+            } else {
+                navigator.clipboard.writeText(window.location.href);
+                alert('Link copied to clipboard!');
+            }
+        });
+
+        // Initialize on load
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+
+</html>

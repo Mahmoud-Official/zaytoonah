@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zaytoonah - Scan Product</title>
+    <meta name="description" content="Scan a product barcode to check for allergens">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Quicksand:wght@500;700&display=swap"
+        rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+
+    <!-- Styles -->
+    <link rel="stylesheet" href="styles.css">
+
+    <!-- QuaggaJS for barcode scanning -->
+    <script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2/dist/quagga.min.js"></script>
+
+    <style>
+        .scanner-page {
+            background: #000;
+        }
+
+        #interactive {
+            position: absolute;
+            inset: 0;
+            z-index: 0;
+        }
+
+        #interactive video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .camera-placeholder {
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .camera-placeholder-content {
+            text-align: center;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .camera-placeholder .material-icons-round {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+            opacity: 0.5;
+        }
+
+        /* Modal for manual entry */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(4px);
+            z-index: 200;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 1.5rem;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal {
+            background: var(--surface);
+            border-radius: var(--radius-2xl);
+            padding: var(--space-6);
+            width: 100%;
+            max-width: 20rem;
+            box-shadow: var(--shadow-lg);
+        }
+
+        .modal h3 {
+            font-size: 1.125rem;
+            font-weight: 700;
+            margin-bottom: var(--space-2);
+        }
+
+        .modal p {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            margin-bottom: var(--space-4);
+        }
+
+        .modal input {
+            width: 100%;
+            padding: var(--space-4);
+            border: 2px solid var(--border);
+            border-radius: var(--radius-lg);
+            font-size: 1.25rem;
+            text-align: center;
+            letter-spacing: 0.1em;
+            font-weight: 600;
+            margin-bottom: var(--space-4);
+            background: var(--bg);
+            color: var(--text-primary);
+        }
+
+        .modal input:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: var(--space-3);
+        }
+
+        .modal-actions .btn {
+            flex: 1;
+            padding: var(--space-3);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="scanner-page">
+        <!-- Camera Feed / Placeholder -->
+        <div id="interactive">
+            <div class="camera-placeholder" id="cameraPlaceholder">
+                <div class="camera-placeholder-content">
+                    <span class="material-icons-round">videocam</span>
+                    <p>Camera initializing...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Overlay -->
+        <div class="scanner-overlay"></div>
+
+        <!-- Scanner Content -->
+        <div class="scanner-content">
+            <!-- Top Bar -->
+            <div class="scanner-header">
+                <button class="scanner-icon-btn" id="flashToggle" aria-label="Toggle flash">
+                    <span class="material-icons-round">flash_off</span>
+                </button>
+                <div class="scanner-logo">
+                    <img src="https://lh3.googleusercontent.com/aida-public/AB6AXuC9tHpsc7VZdg_HDzHWEnpTmSGSYKy5pPA2VAIdBLZUXO1-3rujVF7PFl2DuG8UtwNY1auJy6zr1mjs4Dc7vwhL0UHpntuw5DSY6VvkWOFBPWmuxERDRtjdAsV47RLS8ent_lA6-gdj6BDE_crBar_lSYoeMYJkVFKqkQn_yfdRFv5wjbeXJhlrjH2pLxyrtdmrPP0_EMipTkvGbjoutbwAMLUnIDx_7eMimtOKgYxlGqT6yBvOMC4MA9-ozsjR48aU6CKxyX6QCF0"
+                        alt="Zaytoonah">
+                    <span>Zaytoonah</span>
+                </div>
+                <a href="index.html" class="scanner-icon-btn" aria-label="Close scanner">
+                    <span class="material-icons-round">close</span>
+                </a>
+            </div>
+
+            <!-- Instructions -->
+            <div class="scanner-instructions">
+                <h2>Scan product barcode</h2>
+                <p>Position barcode within frame</p>
+            </div>
+
+            <!-- Scanner Frame -->
+            <div class="scanner-frame-container">
+                <div class="scanner-frame">
+                    <div class="scan-corner top-left"></div>
+                    <div class="scan-corner top-right"></div>
+                    <div class="scan-corner bottom-left"></div>
+                    <div class="scan-corner bottom-right"></div>
+                    <div class="scan-line"></div>
+                    <div class="scanner-frame-border"></div>
+                </div>
+            </div>
+
+            <!-- Status -->
+            <div class="scanner-status">
+                <div class="scanner-status-pill">
+                    <span class="material-icons-round">search</span>
+                    <span id="scanStatus">Searching...</span>
+                </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="scanner-actions">
+                <button class="scanner-manual-btn" id="manualEntryBtn">
+                    <span class="material-icons-round">keyboard</span>
+                    <span>Enter barcode manually</span>
+                </button>
+                <p class="scanner-help">
+                    Having trouble scanning? Ensure good lighting or try manual entry.
+                </p>
+            </div>
+
+            <!-- Bottom Nav -->
+            <div
+                style="display: flex; justify-content: space-around; align-items: center; padding-top: 0.5rem; color: rgba(255, 255, 255, 0.6);">
+                <a href="index.html"
+                    style="display: flex; flex-direction: column; align-items: center; gap: 0.25rem; padding: 0.5rem; color: inherit; text-decoration: none;">
+                    <span class="material-icons-round" style="font-size: 1.5rem;">history</span>
+                    <span style="font-size: 0.625rem;">History</span>
+                </a>
+                <div
+                    style="display: flex; flex-direction: column; align-items: center; gap: 0.25rem; padding: 0.5rem; color: var(--primary);">
+                    <div
+                        style="background: rgba(124, 154, 75, 0.2); padding: 0.5rem; border-radius: 50%; margin-bottom: 0.25rem;">
+                        <span class="material-icons-round"
+                            style="font-size: 1.75rem; color: var(--primary);">qr_code_scanner</span>
+                    </div>
+                    <span style="font-size: 0.625rem; font-weight: 700; color: white;">Scan</span>
+                </div>
+                <a href="profile.html"
+                    style="display: flex; flex-direction: column; align-items: center; gap: 0.25rem; padding: 0.5rem; color: inherit; text-decoration: none;">
+                    <span class="material-icons-round" style="font-size: 1.5rem;">person</span>
+                    <span style="font-size: 0.625rem;">Profile</span>
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Manual Entry Modal -->
+    <div class="modal-overlay" id="manualModal">
+        <div class="modal">
+            <h3>Enter Barcode</h3>
+            <p>Type the barcode number printed below the barcode lines.</p>
+            <input type="text" id="manualBarcode" placeholder="e.g. 5901234123457" inputmode="numeric" pattern="[0-9]*">
+            <div class="modal-actions">
+                <button class="btn btn-secondary" id="cancelManual">Cancel</button>
+                <button class="btn btn-primary" id="submitManual">Search</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+    <script>
+        let flashOn = false;
+        let quaggaInitialized = false;
+
+        // Flash toggle (mock - real implementation requires torch API)
+        document.getElementById('flashToggle').addEventListener('click', () => {
+            flashOn = !flashOn;
+            const icon = document.querySelector('#flashToggle .material-icons-round');
+            icon.textContent = flashOn ? 'flash_on' : 'flash_off';
+        });
+
+        // Manual entry modal
+        document.getElementById('manualEntryBtn').addEventListener('click', () => {
+            document.getElementById('manualModal').classList.add('active');
+            document.getElementById('manualBarcode').focus();
+        });
+
+        document.getElementById('cancelManual').addEventListener('click', () => {
+            document.getElementById('manualModal').classList.remove('active');
+            document.getElementById('manualBarcode').value = '';
+        });
+
+        document.getElementById('submitManual').addEventListener('click', () => {
+            const barcode = document.getElementById('manualBarcode').value.trim();
+            if (barcode) {
+                processBarcode(barcode);
+            }
+        });
+
+        document.getElementById('manualBarcode').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                document.getElementById('submitManual').click();
+            }
+        });
+
+        // Process scanned/entered barcode
+        function processBarcode(barcode) {
+            document.getElementById('scanStatus').textContent = 'Found! Loading...';
+
+            // Simulate API lookup delay
+            setTimeout(() => {
+                // Navigate to results page with barcode
+                window.location.href = `result.html?barcode=${encodeURIComponent(barcode)}`;
+            }, 800);
+        }
+
+        // Initialize QuaggaJS
+        function initScanner() {
+            if (typeof Quagga === 'undefined') {
+                console.log('QuaggaJS not loaded, using demo mode');
+                document.getElementById('cameraPlaceholder').innerHTML = `
+                    <div class="camera-placeholder-content">
+                        <span class="material-icons-round">qr_code_scanner</span>
+                        <p>Demo Mode</p>
+                        <p style="font-size: 0.75rem; margin-top: 0.5rem;">Use manual entry to test</p>
+                    </div>
+                `;
+                return;
+            }
+
+            Quagga.init({
+                inputStream: {
+                    name: "Live",
+                    type: "LiveStream",
+                    target: document.querySelector('#interactive'),
+                    constraints: {
+                        facingMode: "environment",
+                        width: { min: 640 },
+                        height: { min: 480 }
+                    }
+                },
+                decoder: {
+                    readers: [
+                        "ean_reader",
+                        "ean_8_reader",
+                        "upc_reader",
+                        "upc_e_reader",
+                        "code_128_reader"
+                    ]
+                },
+                locate: true
+            }, function (err) {
+                if (err) {
+                    console.log('Camera access denied or not available:', err);
+                    document.getElementById('cameraPlaceholder').innerHTML = `
+                        <div class="camera-placeholder-content">
+                            <span class="material-icons-round">no_photography</span>
+                            <p>Camera not available</p>
+                            <p style="font-size: 0.75rem; margin-top: 0.5rem;">Use manual entry instead</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                document.getElementById('cameraPlaceholder').style.display = 'none';
+                Quagga.start();
+                quaggaInitialized = true;
+            });
+
+            Quagga.onDetected(function (result) {
+                if (result.codeResult && result.codeResult.code) {
+                    // Stop scanning after detection
+                    if (quaggaInitialized) {
+                        Quagga.stop();
+                    }
+                    processBarcode(result.codeResult.code);
+                }
+            });
+        }
+
+        // Start scanner on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            // Small delay to allow page to render
+            setTimeout(initScanner, 500);
+        });
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            if (quaggaInitialized && typeof Quagga !== 'undefined') {
+                Quagga.stop();
+            }
+        });
+    </script>
+</body>
+
+</html>
